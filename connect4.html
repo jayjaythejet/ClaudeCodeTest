@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Connect 4</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #1a1a2e;
+      font-family: 'Segoe UI', sans-serif;
+      color: #fff;
+    }
+
+    h1 {
+      font-size: 2.5rem;
+      margin-bottom: 1rem;
+      letter-spacing: 2px;
+      text-shadow: 0 0 20px rgba(100,180,255,0.5);
+    }
+
+    #status {
+      font-size: 1.2rem;
+      margin-bottom: 1.2rem;
+      height: 1.6rem;
+      transition: color 0.3s;
+    }
+
+    #status .dot {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      vertical-align: middle;
+      margin-right: 6px;
+      box-shadow: 0 0 8px currentColor;
+    }
+
+    #board-wrapper {
+      position: relative;
+    }
+
+    /* Hover preview row above the board */
+    #preview-row {
+      display: grid;
+      grid-template-columns: repeat(7, 70px);
+      gap: 8px;
+      padding: 0 12px;
+      margin-bottom: 4px;
+      height: 36px;
+    }
+
+    .preview-cell {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .preview-piece {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+
+    /* Board */
+    #board {
+      background: #1565c0;
+      padding: 12px;
+      border-radius: 16px;
+      display: grid;
+      grid-template-columns: repeat(7, 70px);
+      grid-template-rows: repeat(6, 70px);
+      gap: 8px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    }
+
+    .cell {
+      width: 70px;
+      height: 70px;
+      border-radius: 50%;
+      background: #1a1a2e;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      transition: background 0.1s;
+    }
+
+    .cell:hover {
+      background: #16213e;
+    }
+
+    .piece {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      position: absolute;
+      top: 0; left: 0;
+      transform: translateY(-100%);
+      animation: drop 0.35s ease-in forwards;
+    }
+
+    .piece.red {
+      background: radial-gradient(circle at 35% 35%, #ff6b6b, #c0392b);
+      box-shadow: inset 0 -4px 8px rgba(0,0,0,0.3);
+    }
+
+    .piece.yellow {
+      background: radial-gradient(circle at 35% 35%, #ffe066, #f39c12);
+      box-shadow: inset 0 -4px 8px rgba(0,0,0,0.3);
+    }
+
+    .piece.win {
+      animation: pulse 0.6s ease-in-out infinite alternate;
+    }
+
+    @keyframes drop {
+      to { transform: translateY(0); }
+    }
+
+    @keyframes pulse {
+      from { filter: brightness(1); }
+      to   { filter: brightness(1.5) drop-shadow(0 0 8px white); }
+    }
+
+    #controls {
+      margin-top: 1.5rem;
+      display: flex;
+      gap: 1rem;
+    }
+
+    button {
+      padding: 0.6rem 1.6rem;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      cursor: pointer;
+      font-weight: 600;
+      transition: transform 0.1s, box-shadow 0.1s;
+    }
+
+    button:active { transform: scale(0.97); }
+
+    #restart-btn {
+      background: #1565c0;
+      color: #fff;
+      box-shadow: 0 4px 12px rgba(21,101,192,0.4);
+    }
+
+    #restart-btn:hover { background: #1976d2; }
+
+    #scores {
+      margin-top: 1.2rem;
+      display: flex;
+      gap: 2rem;
+      font-size: 1rem;
+    }
+
+    .score-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .score-label { opacity: 0.7; font-size: 0.85rem; }
+
+    .score-value { font-size: 1.6rem; font-weight: 700; }
+
+    .red-text  { color: #ff6b6b; }
+    .yellow-text { color: #ffe066; }
+    .draw-text { color: #aaa; }
+  </style>
+</head>
+<body>
+  <h1>Connect 4</h1>
+  <div id="status"></div>
+
+  <div id="board-wrapper">
+    <div id="preview-row">
+      <!-- 7 preview cells -->
+    </div>
+    <div id="board"></div>
+  </div>
+
+  <div id="controls">
+    <button id="restart-btn">New Game</button>
+  </div>
+
+  <div id="scores">
+    <div class="score-box">
+      <span class="score-label red-text">Player 1 (Red)</span>
+      <span class="score-value red-text" id="score-red">0</span>
+    </div>
+    <div class="score-box">
+      <span class="score-label draw-text">Draws</span>
+      <span class="score-value draw-text" id="score-draw">0</span>
+    </div>
+    <div class="score-box">
+      <span class="score-label yellow-text">Player 2 (Yellow)</span>
+      <span class="score-value yellow-text" id="score-yellow">0</span>
+    </div>
+  </div>
+
+  <script>
+    const ROWS = 6, COLS = 7;
+    let board, currentPlayer, gameOver;
+    let scores = { red: 0, yellow: 0, draw: 0 };
+
+    const boardEl    = document.getElementById('board');
+    const statusEl   = document.getElementById('status');
+    const previewRow = document.getElementById('preview-row');
+
+    function init() {
+      board = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+      currentPlayer = 'red';
+      gameOver = false;
+      render();
+      updateStatus();
+    }
+
+    function render() {
+      boardEl.innerHTML = '';
+      // cells rendered row 0 = top row
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          const cell = document.createElement('div');
+          cell.className = 'cell';
+          cell.dataset.col = c;
+
+          const val = board[r][c];
+          if (val) {
+            const piece = document.createElement('div');
+            piece.className = 'piece ' + val;
+            piece.dataset.row = r;
+            cell.appendChild(piece);
+          }
+
+          cell.addEventListener('click', () => drop(c));
+          cell.addEventListener('mouseenter', () => showPreview(c));
+          cell.addEventListener('mouseleave', () => hidePreview(c));
+          boardEl.appendChild(cell);
+        }
+      }
+
+      // Build preview row
+      previewRow.innerHTML = '';
+      for (let c = 0; c < COLS; c++) {
+        const pc = document.createElement('div');
+        pc.className = 'preview-cell';
+        pc.dataset.previewCol = c;
+        const pp = document.createElement('div');
+        pp.className = 'preview-piece ' + currentPlayer;
+        pc.appendChild(pp);
+        previewRow.appendChild(pc);
+      }
+    }
+
+    function showPreview(col) {
+      if (gameOver) return;
+      const pc = previewRow.querySelector(`[data-preview-col="${col}"]`);
+      if (pc) pc.querySelector('.preview-piece').style.opacity = '1';
+    }
+
+    function hidePreview(col) {
+      const pc = previewRow.querySelector(`[data-preview-col="${col}"] .preview-piece`);
+      if (pc) pc.style.opacity = '0';
+    }
+
+    function drop(col) {
+      if (gameOver) return;
+
+      // Find lowest empty row
+      let row = -1;
+      for (let r = ROWS - 1; r >= 0; r--) {
+        if (!board[r][col]) { row = r; break; }
+      }
+      if (row === -1) return; // column full
+
+      board[row][col] = currentPlayer;
+      render();
+
+      // Animate the newly placed piece
+      const cell = boardEl.children[row * COLS + col];
+      const piece = cell.querySelector('.piece');
+      if (piece) {
+        // Calculate drop distance (from top of board to this row)
+        const dropRows = row + 1;
+        const duration = Math.min(0.15 + dropRows * 0.05, 0.5);
+        piece.style.animationDuration = duration + 's';
+      }
+
+      const win = checkWin(row, col);
+      if (win) {
+        highlightWin(win);
+        gameOver = true;
+        scores[currentPlayer]++;
+        updateScores();
+        setTimeout(() => {
+          statusEl.innerHTML = `<span class="dot" style="background:${currentPlayer === 'red' ? '#ff6b6b' : '#ffe066'};color:${currentPlayer === 'red' ? '#ff6b6b' : '#ffe066'}"></span>` +
+            `${currentPlayer === 'red' ? 'Player 1 (Red)' : 'Player 2 (Yellow)'} wins!`;
+        }, 300);
+        return;
+      }
+
+      if (board[0].every(cell => cell !== null)) {
+        gameOver = true;
+        scores.draw++;
+        updateScores();
+        statusEl.textContent = "It's a draw!";
+        return;
+      }
+
+      currentPlayer = currentPlayer === 'red' ? 'yellow' : 'red';
+      updateStatus();
+      // Refresh preview pieces to new color
+      previewRow.querySelectorAll('.preview-piece').forEach(p => {
+        p.className = 'preview-piece ' + currentPlayer;
+      });
+    }
+
+    function updateStatus() {
+      const color = currentPlayer === 'red' ? '#ff6b6b' : '#ffe066';
+      const name  = currentPlayer === 'red' ? 'Player 1 (Red)' : 'Player 2 (Yellow)';
+      statusEl.innerHTML = `<span class="dot" style="background:${color};color:${color}"></span>${name}'s turn`;
+    }
+
+    function updateScores() {
+      document.getElementById('score-red').textContent    = scores.red;
+      document.getElementById('score-yellow').textContent = scores.yellow;
+      document.getElementById('score-draw').textContent   = scores.draw;
+    }
+
+    function checkWin(row, col) {
+      const player = board[row][col];
+      const directions = [[0,1],[1,0],[1,1],[1,-1]];
+
+      for (const [dr, dc] of directions) {
+        const cells = [[row, col]];
+
+        for (let i = 1; i < 4; i++) {
+          const r = row + dr * i, c = col + dc * i;
+          if (r < 0 || r >= ROWS || c < 0 || c >= COLS || board[r][c] !== player) break;
+          cells.push([r, c]);
+        }
+        for (let i = 1; i < 4; i++) {
+          const r = row - dr * i, c = col - dc * i;
+          if (r < 0 || r >= ROWS || c < 0 || c >= COLS || board[r][c] !== player) break;
+          cells.push([r, c]);
+        }
+
+        if (cells.length >= 4) return cells;
+      }
+      return null;
+    }
+
+    function highlightWin(cells) {
+      cells.forEach(([r, c]) => {
+        const cell = boardEl.children[r * COLS + c];
+        const piece = cell.querySelector('.piece');
+        if (piece) piece.classList.add('win');
+      });
+    }
+
+    document.getElementById('restart-btn').addEventListener('click', init);
+
+    init();
+  </script>
+</body>
+</html>
